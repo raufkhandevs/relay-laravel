@@ -5,7 +5,9 @@ namespace App\Data;
 use App\Models\Message;
 use Carbon\CarbonImmutable;
 use Spatie\LaravelData\Data;
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
+#[TypeScript]
 class MessageData extends Data
 {
     public function __construct(

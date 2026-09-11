@@ -6,7 +6,9 @@ use App\Enums\TicketStatus;
 use App\Models\Ticket;
 use Carbon\CarbonImmutable;
 use Spatie\LaravelData\Data;
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
+#[TypeScript]
 class TicketData extends Data
 {
     public function __construct(
