@@ -7,7 +7,7 @@ use App\Http\Controllers\Api\TokenController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/tokens', [TokenController::class, 'store']);
+Route::post('/tokens', [TokenController::class, 'store'])->middleware('throttle:api-tokens');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/tokens/current', [TokenController::class, 'destroy']);

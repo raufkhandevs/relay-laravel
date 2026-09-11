@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Laravel\Sanctum\Contracts\HasAbilities;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -35,8 +36,17 @@ use Laravel\Sanctum\HasApiTokens;
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
+    /**
+     * @use HasApiTokens<HasAbilities>
+     *
+     * Not the default \Laravel\Sanctum\PersonalAccessToken: a session-authenticated
+     * request resolves currentAccessToken() to \Laravel\Sanctum\TransientToken instead,
+     * so the real return type is the interface both classes share.
+     */
+    use HasApiTokens, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasFactory;
 
     /**
      * Get the attributes that should be cast.
