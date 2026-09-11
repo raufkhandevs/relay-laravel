@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('ticket_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->text('body');
-            $table->string('idempotency_key')->nullable()->unique();
+            $table->uuid('idempotency_key')->nullable()->unique();
             $table->timestamps();
 
             $table->index(['ticket_id', 'id']);

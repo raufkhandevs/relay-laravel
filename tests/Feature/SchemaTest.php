@@ -6,6 +6,7 @@ use App\Models\Message;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Str;
 
 it('relates a ticket to its customer, agent and messages', function () {
     $customer = User::factory()->create(['role' => UserRole::Customer]);
@@ -27,9 +28,10 @@ it('relates a ticket to its customer, agent and messages', function () {
 
 it('rejects a duplicate idempotency key', function () {
     $ticket = Ticket::factory()->create();
+    $idempotencyKey = (string) Str::uuid();
 
-    Message::factory()->for($ticket)->create(['idempotency_key' => 'abc-123']);
+    Message::factory()->for($ticket)->create(['idempotency_key' => $idempotencyKey]);
 
-    expect(fn () => Message::factory()->for($ticket)->create(['idempotency_key' => 'abc-123']))
+    expect(fn () => Message::factory()->for($ticket)->create(['idempotency_key' => $idempotencyKey]))
         ->toThrow(UniqueConstraintViolationException::class);
 });
