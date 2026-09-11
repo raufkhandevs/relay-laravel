@@ -1,6 +1,7 @@
 <?php
 
 use App\Data\UserData;
+use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TokenController;
 use Illuminate\Http\Request;
@@ -15,4 +16,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/tickets', [TicketController::class, 'index']);
     Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
+
+    Route::get('/tickets/{ticket}/messages', [MessageController::class, 'index']);
+    Route::post('/tickets/{ticket}/messages', [MessageController::class, 'store']);
 });
