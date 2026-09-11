@@ -1,9 +1,12 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Events\MessageCreated;
 use App\Models\Message;
 use App\Models\Ticket;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 
 it('cursor paginates message history', function () {
@@ -56,6 +59,51 @@ it('returns the original message for a repeated idempotency key', function () {
 
     expect($second->json('id'))->toBe($first->json('id'))
         ->and(Message::where('ticket_id', $ticket->id)->count())->toBe(1);
+});
+
+it('returns the racing writer message instead of a 500 for a concurrent idempotency key', function () {
+    Event::fake([MessageCreated::class]);
+
+    $customer = User::factory()->create(['role' => UserRole::Customer]);
+    $ticket = Ticket::factory()->for($customer, 'customer')->create();
+    $key = (string) Str::uuid();
+
+    // Simulate a genuine race by inserting a competing row out of band, right after
+    // this request's own lookup query runs (finding nothing) and before its create()
+    // runs. The insert happens at the current (non-savepoint) transaction depth, via
+    // a raw query rather than the model's create(), so that when the controller's own
+    // create() collides and its savepoint is rolled back, only its own failed insert
+    // is undone, not this one.
+    $racingId = null;
+    $hooked = false;
+    DB::listen(function ($event) use ($ticket, $key, &$racingId, &$hooked): void {
+        if ($hooked || ! str_contains($event->sql, 'idempotency_key')) {
+            return;
+        }
+
+        $hooked = true;
+        $racingId = DB::table('messages')->insertGetId([
+            'ticket_id' => $ticket->id,
+            'user_id' => $ticket->customer_id,
+            'body' => 'Racing writer got there first.',
+            'idempotency_key' => $key,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    });
+
+    $response = $this->actingAs($customer, 'sanctum')
+        ->postJson("/api/tickets/{$ticket->id}/messages", [
+            'body' => 'Slower request.',
+            'idempotency_key' => $key,
+        ]);
+
+    $response->assertCreated();
+    expect($response->json('id'))->toBe((int) $racingId)
+        ->and($response->json('body'))->toBe('Racing writer got there first.')
+        ->and(Message::where('ticket_id', $ticket->id)->where('idempotency_key', $key)->count())->toBe(1);
+
+    Event::assertNotDispatched(MessageCreated::class);
 });
 
 it('refuses a stranger posting to a ticket', function () {
