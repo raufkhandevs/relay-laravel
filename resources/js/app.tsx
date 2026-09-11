@@ -9,6 +9,9 @@ import { configureEcho } from '@laravel/echo-react';
 
 configureEcho({
     broadcaster: 'reverb',
+    // withBroadcasting() in bootstrap/app.php registers the auth route under
+    // the 'api' prefix, not Echo's default `/broadcasting/auth`.
+    authEndpoint: '/api/broadcasting/auth',
 });
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
