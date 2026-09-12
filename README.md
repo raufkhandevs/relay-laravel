@@ -20,6 +20,23 @@ One Laravel app with two front doors into the same domain logic.
 Both front doors run through the same `TicketPolicy`, and so does websocket channel
 authorisation. The rule is written once.
 
+## Progress
+
+```
+API, auth, websockets     ████████████████████  done
+Inertia web client        ████████████████████  done
+Reply and attachments     ████████████████████  done
+Typing and presence       ░░░░░░░░░░░░░░░░░░░░  next
+Ticket creation           ░░░░░░░░░░░░░░░░░░░░
+Push delivery to Apple    ░░░░░░░░░░░░░░░░░░░░  blocked
+```
+
+84 tests. Serves three clients: this web client, an iOS app and a desktop console.
+
+**Blocked, not forgotten.** Push notifications are built server side and stubbed at the final hop,
+because Apple will not issue APNs credentials to a free account. Decision 0007 spells out exactly
+which leg is untested.
+
 ## Running it
 
 Requires PHP 8.5, Node 22 and Docker.
