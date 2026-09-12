@@ -57,7 +57,11 @@ class MessageController extends Controller
             // in the catch block below can still run.
             $message = DB::transaction(fn () => $ticket->messages()->create([
                 'user_id' => $request->user()->id,
-                'body' => $request->validated('body'),
+                // Empty string, not null, when a file arrives with no caption. The
+                // column is NOT NULL, and "no caption" versus "empty caption" is a
+                // distinction without a difference here: making it nullable would
+                // ripple a nullable type through three clients to express nothing.
+                'body' => $request->validated('body') ?? '',
                 'idempotency_key' => $idempotencyKey,
             ]));
         } catch (UniqueConstraintViolationException) {

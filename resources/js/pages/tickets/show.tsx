@@ -34,8 +34,6 @@ type SendResult =
     | { ok: true; message: App.Data.MessageData }
     | { ok: false; error: string };
 
-const DEFAULT_ATTACHMENT_CAPTION = 'Sent an attachment.';
-
 /**
  * XMLHttpRequest, not fetch: fetch has no way to observe upload progress (only
  * download), and a phone photo over a slow link is exactly the case where sending
@@ -169,12 +167,9 @@ export default function Show({ ticket, messages: initial }: Props) {
             clientId: string = crypto.randomUUID(),
         ) => {
             // A file is allowed with no typed text, but the server's "body" is
-            // required (and Laravel's default TrimStrings + ConvertEmptyStringsToNull
-            // middleware turns a whitespace-only body into null before that check
-            // runs, so blank text does not slip through as a workaround). A plain
-            // caption satisfies it honestly. Normalised once here so the optimistic
-            // entry, the request, and a later retry all agree on the same value.
-            const submittedBody = body || DEFAULT_ATTACHMENT_CAPTION;
+            // A photo often needs no caption, so the API accepts a message with a body,
+            // a file, or both. Nothing is invented here: an empty body is sent empty.
+            const submittedBody = body;
 
             setPending((current) => [
                 ...current.filter((p) => p.clientId !== clientId),

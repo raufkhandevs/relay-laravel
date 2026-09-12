@@ -26,7 +26,16 @@ class StoreMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'body' => ['required', 'string', 'max:5000'],
+            // A photo often needs no caption, so a message is valid with a body, a
+            // file, or both, and invalid with neither. `required_without` rather than
+            // `required` because three clients were each inventing their own way round
+            // the old rule: one fabricated the caption "Sent an attachment.", another
+            // disabled its send button until the user typed something.
+            //
+            // `nullable` matters as much as the rule. Laravel's ConvertEmptyStringsToNull
+            // middleware turns an empty body into null before validation runs, so
+            // without it a client sending an empty string still fails.
+            'body' => ['nullable', 'required_without:file', 'string', 'max:5000'],
             'idempotency_key' => ['required', 'uuid'],
             // "mimetypes" (not "mimes") inspects the file's actual content rather than
             // trusting the client's claimed type or its extension. One attachment per
