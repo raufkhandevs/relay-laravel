@@ -1,6 +1,7 @@
 <?php
 
 use App\Data\UserData;
+use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TokenController;
@@ -19,4 +20,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/tickets/{ticket}/messages', [MessageController::class, 'index'])->whereNumber('ticket');
     Route::post('/tickets/{ticket}/messages', [MessageController::class, 'store'])->whereNumber('ticket');
+
+    Route::get('/attachments/{attachment}', [AttachmentController::class, 'show'])->whereNumber('attachment');
 });

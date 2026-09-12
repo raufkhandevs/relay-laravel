@@ -60,6 +60,22 @@ return [
             'report' => false,
         ],
 
+        // Private object storage for ticket attachments. MinIO locally (see
+        // docker-compose.yml), a real S3 bucket in production, behind the same driver.
+        // Nothing is ever publicly readable: downloads only happen through short-lived
+        // presigned URLs (see AttachmentController), never a permanent path.
+        'attachments' => [
+            'driver' => 's3',
+            'key' => env('ATTACHMENTS_KEY'),
+            'secret' => env('ATTACHMENTS_SECRET'),
+            'region' => env('ATTACHMENTS_REGION', 'us-east-1'),
+            'bucket' => env('ATTACHMENTS_BUCKET'),
+            'endpoint' => env('ATTACHMENTS_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'visibility' => 'private',
+            'throw' => true,
+        ],
+
     ],
 
     /*

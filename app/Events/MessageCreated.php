@@ -30,6 +30,6 @@ class MessageCreated implements ShouldBroadcast
     /** @return array<string, mixed> */
     public function broadcastWith(): array
     {
-        return MessageData::fromModel($this->message->load('author'))->toArray();
+        return MessageData::fromModel($this->message->load(['author', 'attachments']))->toArray();
     }
 }

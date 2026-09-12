@@ -15,6 +15,8 @@ class MessageData extends Data
         public int $ticket_id,
         public string $body,
         public ParticipantData $author,
+        /** @var AttachmentData[] */
+        public array $attachments,
         public CarbonImmutable $created_at,
     ) {}
 
@@ -25,6 +27,7 @@ class MessageData extends Data
             $message->ticket_id,
             $message->body,
             ParticipantData::fromModel($message->author),
+            AttachmentData::collect($message->attachments->all()),
             $message->created_at->toImmutable(),
         );
     }

@@ -1,10 +1,18 @@
 declare namespace App {
 namespace Data {
+export type AttachmentData = {
+id: number,
+original_name: string,
+mime: string,
+size_bytes: number,
+created_at: string,
+};
 export type MessageData = {
 id: number,
 ticket_id: number,
 body: string,
 author: App.Data.ParticipantData,
+attachments: App.Data.AttachmentData[],
 created_at: string,
 };
 export type ParticipantData = {
