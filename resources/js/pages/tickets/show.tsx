@@ -1,9 +1,17 @@
 import { Head, usePage } from '@inertiajs/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    type DragEvent,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
 import MessageController from '@/actions/App/Http/Controllers/Api/MessageController';
+import { AttachmentView } from '@/components/attachment-view';
 import { Button } from '@/components/ui/button';
 import { MessageComposer } from '@/components/message-composer';
 import { useTicketChannel } from '@/hooks/use-ticket-channel';
+import { validateAttachment } from '@/lib/attachments';
 import { formatTimestamp } from '@/lib/format';
 import { TICKET_STATUS } from '@/lib/ticket-status';
 import { cn } from '@/lib/utils';
@@ -16,13 +24,90 @@ type Props = {
 type PendingMessage = {
     clientId: string;
     body: string;
+    file: File | null;
     status: 'sending' | 'failed';
+    progress: number;
+    error: string | null;
 };
+
+type SendResult =
+    | { ok: true; message: App.Data.MessageData }
+    | { ok: false; error: string };
+
+const DEFAULT_ATTACHMENT_CAPTION = 'Sent an attachment.';
+
+/**
+ * XMLHttpRequest, not fetch: fetch has no way to observe upload progress (only
+ * download), and a phone photo over a slow link is exactly the case where sending
+ * with no feedback reads as a hang. `upload.onprogress` is XHR-only.
+ */
+function postMessage(
+    url: string,
+    formData: FormData,
+    onProgress: (percent: number) => void,
+): Promise<SendResult> {
+    return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Accept', 'application/json');
+
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+                onProgress(Math.round((event.loaded / event.total) * 100));
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve({ ok: true, message: JSON.parse(xhr.responseText) });
+                return;
+            }
+
+            resolve({ ok: false, error: readErrorMessage(xhr) });
+        };
+
+        xhr.onerror = () =>
+            resolve({
+                ok: false,
+                error: 'Network error. Check your connection.',
+            });
+
+        xhr.send(formData);
+    });
+}
+
+function readErrorMessage(xhr: XMLHttpRequest): string {
+    // The web server rejects an oversized upload before PHP runs, so unlike every
+    // other error here, a 413 carries no JSON body to read.
+    if (xhr.status === 413) {
+        return 'That file is too large. The limit is 10 MB.';
+    }
+
+    try {
+        const data = JSON.parse(xhr.responseText);
+        const fileError: string | undefined = data?.errors?.file?.[0];
+        const bodyError: string | undefined = data?.errors?.body?.[0];
+
+        return (
+            fileError ??
+            bodyError ??
+            data?.message ??
+            `Send failed: ${xhr.status}`
+        );
+    } catch {
+        return `Send failed: ${xhr.status}`;
+    }
+}
 
 export default function Show({ ticket, messages: initial }: Props) {
     const { auth } = usePage().props;
     const [messages, setMessages] = useState(initial);
     const [pending, setPending] = useState<PendingMessage[]>([]);
+    const [file, setFile] = useState<File | null>(null);
+    const [fileError, setFileError] = useState<string | null>(null);
+    const [dragActive, setDragActive] = useState(false);
+    const dragDepth = useRef(0);
 
     // Without this the newest message lands below the fold and sending looks like it
     // silently failed. Only follow when the reader is already at the bottom, so someone
@@ -78,42 +163,68 @@ export default function Show({ ticket, messages: initial }: Props) {
     useTicketChannel(ticket.id, append);
 
     const send = useCallback(
-        (body: string, clientId: string = crypto.randomUUID()) => {
+        (
+            body: string,
+            attachment: File | null,
+            clientId: string = crypto.randomUUID(),
+        ) => {
+            // A file is allowed with no typed text, but the server's "body" is
+            // required (and Laravel's default TrimStrings + ConvertEmptyStringsToNull
+            // middleware turns a whitespace-only body into null before that check
+            // runs, so blank text does not slip through as a workaround). A plain
+            // caption satisfies it honestly. Normalised once here so the optimistic
+            // entry, the request, and a later retry all agree on the same value.
+            const submittedBody = body || DEFAULT_ATTACHMENT_CAPTION;
+
             setPending((current) => [
                 ...current.filter((p) => p.clientId !== clientId),
-                { clientId, body, status: 'sending' },
+                {
+                    clientId,
+                    body: submittedBody,
+                    file: attachment,
+                    status: 'sending',
+                    progress: 0,
+                    error: null,
+                },
             ]);
 
-            fetch(MessageController.store(ticket.id).url, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
+            const formData = new FormData();
+            formData.append('body', submittedBody);
+            formData.append('idempotency_key', clientId);
+            if (attachment) {
+                formData.append('file', attachment);
+            }
+
+            // postMessage() always resolves (never rejects: XHR failures are
+            // reported as an { ok: false } result), so there is no rejection
+            // to hand a .catch to.
+            void postMessage(
+                MessageController.store(ticket.id).url,
+                formData,
+                (progress) => {
+                    setPending((current) =>
+                        current.map((p) =>
+                            p.clientId === clientId ? { ...p, progress } : p,
+                        ),
+                    );
                 },
-                body: JSON.stringify({ body, idempotency_key: clientId }),
-            })
-                .then(async (response) => {
-                    if (!response.ok) {
-                        throw new Error(`Send failed: ${response.status}`);
-                    }
-
-                    const message: App.Data.MessageData = await response.json();
-
+            ).then((result) => {
+                if (result.ok) {
                     setPending((current) =>
                         current.filter((p) => p.clientId !== clientId),
                     );
-                    append(message);
-                })
-                .catch(() => {
-                    setPending((current) =>
-                        current.map((p) =>
-                            p.clientId === clientId
-                                ? { ...p, status: 'failed' }
-                                : p,
-                        ),
-                    );
-                });
+                    append(result.message);
+                    return;
+                }
+
+                setPending((current) =>
+                    current.map((p) =>
+                        p.clientId === clientId
+                            ? { ...p, status: 'failed', error: result.error }
+                            : p,
+                    ),
+                );
+            });
         },
         [append, ticket.id],
     );
@@ -123,17 +234,78 @@ export default function Show({ ticket, messages: initial }: Props) {
             const entry = pending.find((p) => p.clientId === clientId);
 
             if (entry) {
-                send(entry.body, clientId);
+                send(entry.body, entry.file, clientId);
             }
         },
         [pending, send],
     );
 
+    const selectFile = useCallback((selected: File | null) => {
+        setFile(selected);
+        setFileError(selected ? validateAttachment(selected) : null);
+    }, []);
+
+    const handleSend = useCallback(
+        (body: string) => {
+            send(body, file);
+            setFile(null);
+            setFileError(null);
+        },
+        [send, file],
+    );
+
+    const onDragOver = (event: DragEvent<HTMLDivElement>) => {
+        if (event.dataTransfer.types.includes('Files')) {
+            event.preventDefault();
+        }
+    };
+
+    const onDragEnter = (event: DragEvent<HTMLDivElement>) => {
+        if (!event.dataTransfer.types.includes('Files')) {
+            return;
+        }
+        event.preventDefault();
+        dragDepth.current += 1;
+        setDragActive(true);
+    };
+
+    const onDragLeave = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) {
+            setDragActive(false);
+        }
+    };
+
+    const onDrop = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        dragDepth.current = 0;
+        setDragActive(false);
+        const dropped = event.dataTransfer.files?.[0];
+        if (dropped) {
+            selectFile(dropped);
+        }
+    };
+
     const status = TICKET_STATUS[ticket.status];
 
     return (
-        <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-3xl flex-col">
+        <div
+            className="relative mx-auto flex h-[calc(100vh-4rem)] max-w-3xl flex-col"
+            onDragOver={onDragOver}
+            onDragEnter={onDragEnter}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+        >
             <Head title={ticket.subject} />
+
+            {dragActive && (
+                <div className="border-accent bg-ground/90 pointer-events-none absolute inset-0 z-10 m-3 flex items-center justify-center rounded-lg border-2 border-dashed">
+                    <p className="text-accent text-sm font-medium">
+                        Drop to attach
+                    </p>
+                </div>
+            )}
 
             <header className="border-rule flex items-start gap-4 border-b px-6 py-6">
                 <span
@@ -163,6 +335,7 @@ export default function Show({ ticket, messages: initial }: Props) {
             >
                 {messages.map((message) => {
                     const mine = message.author.id === auth.user.id;
+                    const hasBody = message.body.trim().length > 0;
 
                     return (
                         <li
@@ -174,13 +347,19 @@ export default function Show({ ticket, messages: initial }: Props) {
                         >
                             <div
                                 className={cn(
-                                    'max-w-lg rounded-lg px-4 py-3 text-sm whitespace-pre-wrap',
+                                    'flex max-w-lg flex-col gap-2 rounded-lg px-4 py-3 text-sm whitespace-pre-wrap',
                                     mine
                                         ? 'bg-surface-own text-ink'
                                         : 'border-rule bg-surface text-ink border',
                                 )}
                             >
-                                {message.body}
+                                {hasBody && <p>{message.body}</p>}
+                                {message.attachments.map((attachment) => (
+                                    <AttachmentView
+                                        key={attachment.id}
+                                        attachment={attachment}
+                                    />
+                                ))}
                             </div>
                             <p className="text-muted-foreground px-1 text-xs">
                                 {message.author.name}{' '}
@@ -197,8 +376,17 @@ export default function Show({ ticket, messages: initial }: Props) {
                         key={entry.clientId}
                         className="flex flex-col items-end gap-1"
                     >
-                        <div className="bg-surface-own text-ink max-w-lg rounded-lg px-4 py-3 text-sm whitespace-pre-wrap opacity-60">
-                            {entry.body}
+                        <div className="bg-surface-own text-ink flex max-w-lg flex-col gap-2 rounded-lg px-4 py-3 text-sm whitespace-pre-wrap opacity-60">
+                            {entry.body.trim().length > 0 && (
+                                <p>{entry.body}</p>
+                            )}
+                            {entry.file && (
+                                <p className="text-xs">
+                                    {entry.file.name}
+                                    {entry.status === 'sending' &&
+                                        ` - ${entry.progress}%`}
+                                </p>
+                            )}
                         </div>
                         <p className="text-muted-foreground flex items-center gap-2 px-1 text-xs">
                             {entry.status === 'sending' ? (
@@ -206,7 +394,7 @@ export default function Show({ ticket, messages: initial }: Props) {
                             ) : (
                                 <>
                                     <span className="text-destructive">
-                                        Failed to send
+                                        {entry.error ?? 'Failed to send'}
                                     </span>
                                     <Button
                                         variant="ghost"
@@ -223,7 +411,12 @@ export default function Show({ ticket, messages: initial }: Props) {
                 ))}
             </ol>
 
-            <MessageComposer onSend={send} />
+            <MessageComposer
+                file={file}
+                fileError={fileError}
+                onFileChange={selectFile}
+                onSend={handleSend}
+            />
         </div>
     );
 }

@@ -52,3 +52,22 @@ export function formatTimestamp(iso: string): string {
 
     return (isToday ? timeFormatter : dateTimeFormatter).format(date);
 }
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
+
+/**
+ * "128 B", "3.4 MB": a file size for a chip or an attachment link.
+ */
+export function formatBytes(bytes: number): string {
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < BYTE_UNITS.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+
+    const precision = unitIndex === 0 || value >= 10 ? 0 : 1;
+
+    return `${value.toFixed(precision)} ${BYTE_UNITS[unitIndex]}`;
+}
