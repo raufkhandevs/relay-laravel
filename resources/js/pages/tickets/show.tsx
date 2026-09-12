@@ -1,5 +1,5 @@
 import { Head, usePage } from '@inertiajs/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import MessageController from '@/actions/App/Http/Controllers/Api/MessageController';
 import { Button } from '@/components/ui/button';
 import { MessageComposer } from '@/components/message-composer';
@@ -23,6 +23,29 @@ export default function Show({ ticket, messages: initial }: Props) {
     const { auth } = usePage().props;
     const [messages, setMessages] = useState(initial);
     const [pending, setPending] = useState<PendingMessage[]>([]);
+
+    // Without this the newest message lands below the fold and sending looks like it
+    // silently failed. Only follow when the reader is already at the bottom, so someone
+    // scrolled up reading history is not yanked back down every time a message arrives.
+    const listRef = useRef<HTMLOListElement>(null);
+    const followingRef = useRef(true);
+
+    const trackFollowing = useCallback(() => {
+        const list = listRef.current;
+        if (!list) {
+            return;
+        }
+        const distanceFromBottom =
+            list.scrollHeight - list.scrollTop - list.clientHeight;
+        followingRef.current = distanceFromBottom < 80;
+    }, []);
+
+    useEffect(() => {
+        const list = listRef.current;
+        if (list && followingRef.current) {
+            list.scrollTop = list.scrollHeight;
+        }
+    }, [messages, pending]);
 
     const append = useCallback(
         (incoming: App.Data.MessageData) => {
@@ -133,7 +156,11 @@ export default function Show({ ticket, messages: initial }: Props) {
                 </div>
             </header>
 
-            <ol className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-6">
+            <ol
+                ref={listRef}
+                onScroll={trackFollowing}
+                className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-6"
+            >
                 {messages.map((message) => {
                     const mine = message.author.id === auth.user.id;
 
