@@ -23,6 +23,40 @@
     --status-pending: #5b6676;
     --status-resolved: #15803d;
     --status-closed: #8a8f98;
+
+    /*
+     * The tint behind your own messages. A fixed accent opacity cannot serve both
+     * themes: 12% of a dark accent reads clearly on white, while 12% of a light
+     * accent on a dark surface is almost nothing, and own and other messages stop
+     * being tellable apart. So the mix is a token and each theme sets its own.
+     */
+    --surface-own: color-mix(in oklab, var(--accent) 12%, var(--surface));
+}
+
+/*
+ * The dark palette from 0009. Not an inversion: the ground is lifted off black
+ * so surfaces above it do not read as glowing panels, text stops short of pure
+ * white to avoid haloing over a long shift, and the accent and status colours
+ * are lifted because #1d6f8b and #15803d are close to invisible on a dark
+ * ground. Everything downstream derives from these nine, so nothing else in
+ * this file needs a dark variant.
+ *
+ * Selection follows the operating system. There is no in-app toggle: someone
+ * who wants dark has already said so once, and asking again per app is noise.
+ */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ink: #e6eaf0;
+        --ground: #0e1319;
+        --surface: #161d26;
+        --rule: #242e3a;
+        --accent: #4fa8c4;
+        --status-open: #e0a159;
+        --status-pending: #8a96a6;
+        --status-resolved: #5cc489;
+        --status-closed: #6c7887;
+        --surface-own: color-mix(in oklab, var(--accent) 30%, var(--surface));
+    }
 }
 
 @theme {
@@ -73,6 +107,7 @@
     --color-input: var(--input);
     --color-ring: var(--ring);
 
+    --color-surface-own: var(--surface-own);
     --color-status-open: var(--status-open);
     --color-status-pending: var(--status-pending);
     --color-status-resolved: var(--status-resolved);
@@ -81,9 +116,9 @@
 
 /*
  * Every shadcn/ui slot below is a role assigned to one of the nine tokens
- * above, not a new colour. There is one palette, not one per theme: 0009
- * specifies a single palette, so `.dark` intentionally mirrors `:root`
- * rather than inventing a second one.
+ * above, not a new colour. Both themes flow through these same roles, so the
+ * component hierarchy survives the switch without a single dark override
+ * below this point.
  */
 :root,
 .dark {

@@ -176,7 +176,7 @@ export default function Show({ ticket, messages: initial }: Props) {
                                 className={cn(
                                     'max-w-lg rounded-lg px-4 py-3 text-sm whitespace-pre-wrap',
                                     mine
-                                        ? 'bg-accent/10 text-ink'
+                                        ? 'bg-surface-own text-ink'
                                         : 'border-rule bg-surface text-ink border',
                                 )}
                             >
@@ -197,7 +197,7 @@ export default function Show({ ticket, messages: initial }: Props) {
                         key={entry.clientId}
                         className="flex flex-col items-end gap-1"
                     >
-                        <div className="bg-accent/10 text-ink max-w-lg rounded-lg px-4 py-3 text-sm whitespace-pre-wrap opacity-60">
+                        <div className="bg-surface-own text-ink max-w-lg rounded-lg px-4 py-3 text-sm whitespace-pre-wrap opacity-60">
                             {entry.body}
                         </div>
                         <p className="text-muted-foreground flex items-center gap-2 px-1 text-xs">
