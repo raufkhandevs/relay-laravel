@@ -449,7 +449,7 @@ export default function Show({ ticket, messages: initial }: Props) {
                     </li>
                 ))}
 
-                {typingName && <TypingBubble />}
+                {typingName && <TypingBubble name={typingName} />}
             </ol>
 
             <MessageComposer
