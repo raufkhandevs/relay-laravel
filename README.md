@@ -11,7 +11,8 @@ consume this API and are built next.
 
 One Laravel app with two front doors into the same domain logic.
 
-- **Web**, at `/tickets`. Inertia and React 19, authenticated by session cookie.
+- **Web**, at `/tickets`. Inertia and React 19, authenticated by session cookie. Customers read
+  and reply here.
 - **API**, under `/api`. JSON, authenticated by Sanctum bearer token. This is what the mobile and
   desktop clients will use.
 - **Websockets**, over Laravel Reverb. Messages appear in every open client without a refresh.
@@ -74,3 +75,9 @@ verified by hand.
 The reasoning behind the parts that look unusual lives in the parent repo under `docs/decisions`.
 The ones worth reading before changing anything here: one backend rather than three, Sanctum with
 two auth modes, the denormalised `last_message_at`, and why push is stubbed locally.
+
+## Design
+
+Palette, type and the status-edge device are shared with the other two clients and defined in
+the parent repo's `docs/decisions/0009-one-design-system-two-densities.md`. The customer surfaces
+run the system roomy; the agent console runs it compact.
