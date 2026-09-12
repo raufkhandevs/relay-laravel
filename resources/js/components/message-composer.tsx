@@ -9,18 +9,25 @@ type Props = {
     fileError: string | null;
     onFileChange: (file: File | null) => void;
     onSend: (body: string) => void;
+    onTyping: () => void;
 };
 
 const ACCEPT = ALLOWED_ATTACHMENT_MIMES.join(',');
+
+// At most one whisper per second, leading edge: the first keystroke of a
+// burst fires immediately and the rest are swallowed until the second is up.
+const TYPING_THROTTLE_MS = 1000;
 
 export function MessageComposer({
     file,
     fileError,
     onFileChange,
     onSend,
+    onTyping,
 }: Props) {
     const [body, setBody] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const lastTypingSentAt = useRef(0);
     const trimmed = body.trim();
     const canSend = (trimmed.length > 0 || file !== null) && !fileError;
 
@@ -45,6 +52,16 @@ export function MessageComposer({
 
     const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
         onFileChange(event.target.files?.[0] ?? null);
+    };
+
+    const onBodyChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+        setBody(event.target.value);
+
+        const now = Date.now();
+        if (now - lastTypingSentAt.current >= TYPING_THROTTLE_MS) {
+            lastTypingSentAt.current = now;
+            onTyping();
+        }
     };
 
     return (
@@ -98,7 +115,7 @@ export function MessageComposer({
                 </Button>
                 <textarea
                     value={body}
-                    onChange={(event) => setBody(event.target.value)}
+                    onChange={onBodyChange}
                     onKeyDown={onKeyDown}
                     placeholder="Write a reply. Enter to send, Shift+Enter for a new line."
                     rows={2}

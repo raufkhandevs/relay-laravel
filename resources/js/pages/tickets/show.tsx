@@ -10,6 +10,7 @@ import MessageController from '@/actions/App/Http/Controllers/Api/MessageControl
 import { AttachmentView } from '@/components/attachment-view';
 import { Button } from '@/components/ui/button';
 import { MessageComposer } from '@/components/message-composer';
+import { TypingBubble } from '@/components/typing-bubble';
 import { useTicketChannel } from '@/hooks/use-ticket-channel';
 import { validateAttachment } from '@/lib/attachments';
 import { formatTimestamp } from '@/lib/format';
@@ -33,6 +34,11 @@ type PendingMessage = {
 type SendResult =
     | { ok: true; message: App.Data.MessageData }
     | { ok: false; error: string };
+
+// Hide the bubble this long after the last whisper. Never wait for a
+// "stopped typing" message: the sender can close the laptop or lose signal
+// mid-word, and this is what keeps the bubble from getting stuck forever.
+const TYPING_EXPIRY_MS = 3000;
 
 /**
  * XMLHttpRequest, not fetch: fetch has no way to observe upload progress (only
@@ -106,6 +112,8 @@ export default function Show({ ticket, messages: initial }: Props) {
     const [fileError, setFileError] = useState<string | null>(null);
     const [dragActive, setDragActive] = useState(false);
     const dragDepth = useRef(0);
+    const [typingName, setTypingName] = useState<string | null>(null);
+    const typingExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Without this the newest message lands below the fold and sending looks like it
     // silently failed. Only follow when the reader is already at the bottom, so someone
@@ -128,7 +136,35 @@ export default function Show({ ticket, messages: initial }: Props) {
         if (list && followingRef.current) {
             list.scrollTop = list.scrollHeight;
         }
-    }, [messages, pending]);
+    }, [messages, pending, typingName]);
+
+    // Cleared and restarted on every whisper, so the bubble only disappears
+    // once TYPING_EXPIRY_MS has passed with no further whisper.
+    const handleTypingReceived = useCallback(
+        (name: string) => {
+            if (name === auth.user.name) {
+                return;
+            }
+
+            setTypingName(name);
+
+            if (typingExpiryRef.current) {
+                clearTimeout(typingExpiryRef.current);
+            }
+            typingExpiryRef.current = setTimeout(() => {
+                setTypingName(null);
+            }, TYPING_EXPIRY_MS);
+        },
+        [auth.user.name],
+    );
+
+    useEffect(() => {
+        return () => {
+            if (typingExpiryRef.current) {
+                clearTimeout(typingExpiryRef.current);
+            }
+        };
+    }, []);
 
     const append = useCallback(
         (incoming: App.Data.MessageData) => {
@@ -158,7 +194,15 @@ export default function Show({ ticket, messages: initial }: Props) {
         [auth.user.id],
     );
 
-    useTicketChannel(ticket.id, append);
+    const { whisperTyping } = useTicketChannel(
+        ticket.id,
+        append,
+        handleTypingReceived,
+    );
+
+    const sendTyping = useCallback(() => {
+        whisperTyping(auth.user.name);
+    }, [whisperTyping, auth.user.name]);
 
     const send = useCallback(
         (
@@ -404,6 +448,8 @@ export default function Show({ ticket, messages: initial }: Props) {
                         </p>
                     </li>
                 ))}
+
+                {typingName && <TypingBubble />}
             </ol>
 
             <MessageComposer
@@ -411,6 +457,7 @@ export default function Show({ ticket, messages: initial }: Props) {
                 fileError={fileError}
                 onFileChange={selectFile}
                 onSend={handleSend}
+                onTyping={sendTyping}
             />
         </div>
     );
