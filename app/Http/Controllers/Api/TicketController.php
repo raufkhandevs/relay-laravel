@@ -15,7 +15,7 @@ class TicketController extends Controller
         $tickets = Ticket::query()
             ->with(['customer', 'assignedAgent'])
             ->when(
-                $request->user()->role === UserRole::Customer,
+                $request->user()->role !== UserRole::Agent,
                 fn ($query) => $query->where('customer_id', $request->user()->id),
             )
             ->orderByDesc('last_message_at')

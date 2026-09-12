@@ -106,6 +106,23 @@ it('returns the racing writer message instead of a 500 for a concurrent idempote
     Event::assertNotDispatched(MessageCreated::class);
 });
 
+it('allows the same idempotency key on two different tickets', function () {
+    $agent = User::factory()->create(['role' => UserRole::Agent]);
+    $ticketOne = Ticket::factory()->create();
+    $ticketTwo = Ticket::factory()->create();
+    $key = (string) Str::uuid();
+
+    $first = $this->actingAs($agent, 'sanctum')
+        ->postJson("/api/tickets/{$ticketOne->id}/messages", ['body' => 'On ticket one', 'idempotency_key' => $key]);
+
+    $second = $this->actingAs($agent, 'sanctum')
+        ->postJson("/api/tickets/{$ticketTwo->id}/messages", ['body' => 'On ticket two', 'idempotency_key' => $key]);
+
+    $first->assertCreated();
+    $second->assertCreated();
+    expect($first->json('id'))->not->toBe($second->json('id'));
+});
+
 it('refuses a stranger posting to a ticket', function () {
     $stranger = User::factory()->create(['role' => UserRole::Customer]);
     $ticket = Ticket::factory()->create();

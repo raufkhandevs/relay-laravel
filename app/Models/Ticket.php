@@ -25,7 +25,7 @@ class Ticket extends Model
     /** @use HasFactory<TicketFactory> */
     use HasFactory;
 
-    protected $fillable = ['subject', 'status', 'customer_id', 'assigned_agent_id', 'last_message_at'];
+    protected $fillable = ['subject', 'status', 'last_message_at'];
 
     protected function casts(): array
     {

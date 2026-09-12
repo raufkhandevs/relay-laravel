@@ -15,8 +15,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', fn (Request $request) => UserData::fromModel($request->user()));
 
     Route::get('/tickets', [TicketController::class, 'index']);
-    Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->whereNumber('ticket');
 
-    Route::get('/tickets/{ticket}/messages', [MessageController::class, 'index']);
-    Route::post('/tickets/{ticket}/messages', [MessageController::class, 'store']);
+    Route::get('/tickets/{ticket}/messages', [MessageController::class, 'index'])->whereNumber('ticket');
+    Route::post('/tickets/{ticket}/messages', [MessageController::class, 'store'])->whereNumber('ticket');
 });

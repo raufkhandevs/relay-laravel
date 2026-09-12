@@ -15,8 +15,8 @@ class TicketData extends Data
         public int $id,
         public string $subject,
         public TicketStatus $status,
-        public UserData $customer,
-        public ?UserData $assigned_agent,
+        public ParticipantData $customer,
+        public ?ParticipantData $assigned_agent,
         public ?CarbonImmutable $last_message_at,
         public CarbonImmutable $created_at,
     ) {}
@@ -27,8 +27,8 @@ class TicketData extends Data
             $ticket->id,
             $ticket->subject,
             $ticket->status,
-            UserData::fromModel($ticket->customer),
-            $ticket->assignedAgent ? UserData::fromModel($ticket->assignedAgent) : null,
+            ParticipantData::fromModel($ticket->customer),
+            $ticket->assignedAgent ? ParticipantData::fromModel($ticket->assignedAgent) : null,
             $ticket->last_message_at?->toImmutable(),
             $ticket->created_at->toImmutable(),
         );

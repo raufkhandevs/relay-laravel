@@ -14,7 +14,7 @@ class MessageData extends Data
         public int $id,
         public int $ticket_id,
         public string $body,
-        public UserData $author,
+        public ParticipantData $author,
         public CarbonImmutable $created_at,
     ) {}
 
@@ -24,7 +24,7 @@ class MessageData extends Data
             $message->id,
             $message->ticket_id,
             $message->body,
-            UserData::fromModel($message->author),
+            ParticipantData::fromModel($message->author),
             $message->created_at->toImmutable(),
         );
     }
