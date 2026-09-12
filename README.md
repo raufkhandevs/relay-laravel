@@ -26,8 +26,8 @@ authorisation. The rule is written once.
 API, auth, websockets     ████████████████████  done
 Inertia web client        ████████████████████  done
 Reply and attachments     ████████████████████  done
-Typing and presence       ░░░░░░░░░░░░░░░░░░░░  next
-Ticket creation           ░░░░░░░░░░░░░░░░░░░░
+Typing indicator          ████████████████████  done
+Ticket creation           ░░░░░░░░░░░░░░░░░░░░  next
 Push delivery to Apple    ░░░░░░░░░░░░░░░░░░░░  blocked
 ```
 
