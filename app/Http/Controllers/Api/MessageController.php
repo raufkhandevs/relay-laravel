@@ -44,7 +44,12 @@ class MessageController extends Controller
         if ($existing) {
             // Same key seen before: return the original rather than creating a second
             // message. Any file on this retry is discarded rather than stored, so a
-            // retried upload never produces a second attachment or an orphaned object.
+            // retried upload never produces a second attachment.
+            //
+            // Reaching here means the first attempt committed, which now implies its
+            // attachment committed too: the two share a transaction. A first attempt
+            // that failed to store its file never committed a message, so its key is
+            // free and the retry creates both.
             return response()->json(
                 MessageData::fromModel($existing->load(['author', 'attachments'])),
                 JsonResponse::HTTP_CREATED,
@@ -52,18 +57,34 @@ class MessageController extends Controller
         }
 
         try {
-            // A savepoint (not a bare create()) so that a unique-constraint violation
-            // only rolls back this insert, not any outer transaction, and the re-fetch
-            // in the catch block below can still run.
-            $message = DB::transaction(fn () => $ticket->messages()->create([
-                'user_id' => $request->user()->id,
-                // Empty string, not null, when a file arrives with no caption. The
-                // column is NOT NULL, and "no caption" versus "empty caption" is a
-                // distinction without a difference here: making it nullable would
-                // ripple a nullable type through three clients to express nothing.
-                'body' => $request->validated('body') ?? '',
-                'idempotency_key' => $idempotencyKey,
-            ]));
+            // The message and its attachment commit together, or neither does.
+            //
+            // With the upload outside this transaction, a storage failure left the
+            // message committed and its idempotency key consumed, so the client's
+            // retry took the $existing branch above and received a cheerful 201 with
+            // no attachment. The file was gone and nothing could tell. Rolling the
+            // message back instead releases the key, so a retry genuinely retries.
+            //
+            // A savepoint rather than a bare create() so a unique-constraint
+            // violation only rolls back this work, not any outer transaction, and the
+            // re-fetch in the catch block below can still run.
+            $message = DB::transaction(function () use ($ticket, $request, $idempotencyKey) {
+                $message = $ticket->messages()->create([
+                    'user_id' => $request->user()->id,
+                    // Empty string, not null, when a file arrives with no caption. The
+                    // column is NOT NULL, and "no caption" versus "empty caption" is a
+                    // distinction without a difference here: making it nullable would
+                    // ripple a nullable type through three clients to express nothing.
+                    'body' => $request->validated('body') ?? '',
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+
+                if ($file = $request->file('file')) {
+                    $this->storeAttachment($file, $message);
+                }
+
+                return $message;
+            });
         } catch (UniqueConstraintViolationException) {
             // Lost the race: another request with the same key committed first.
             // Return its message rather than a 500, and do not broadcast a duplicate.
@@ -77,10 +98,6 @@ class MessageController extends Controller
                 MessageData::fromModel($message->load(['author', 'attachments'])),
                 JsonResponse::HTTP_CREATED,
             );
-        }
-
-        if ($file = $request->file('file')) {
-            $this->storeAttachment($file, $message);
         }
 
         MessageCreated::dispatch($message);
@@ -113,6 +130,11 @@ class MessageController extends Controller
             throw new RuntimeException("Unable to read uploaded file [{$file->getRealPath()}].");
         }
 
+        // Written inside the caller's transaction. Object storage is not
+        // transactional, so a database rollback after this line leaves the object
+        // behind. An orphan is the right failure to prefer over a message that claims
+        // an attachment it does not have, and a bucket lifecycle rule reaps them
+        // without any application code.
         Storage::disk('attachments')->put($diskPath, $contents, [
             'ContentType' => $mime,
         ]);

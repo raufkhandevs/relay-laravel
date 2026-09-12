@@ -56,6 +56,19 @@ function postMessage(
         xhr.withCredentials = true;
         xhr.setRequestHeader('Accept', 'application/json');
 
+        // Raw XHR does not attach the CSRF header the way axios does, so without this
+        // every upload came back 419 and the feature never worked. Sanctum's stateful
+        // guard reads X-XSRF-TOKEN, and Laravel puts the value in a cookie of the same
+        // name, URL encoded.
+        const xsrf = document.cookie
+            .split('; ')
+            .find((row) => row.startsWith('XSRF-TOKEN='))
+            ?.split('=')[1];
+
+        if (xsrf) {
+            xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(xsrf));
+        }
+
         xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
                 onProgress(Math.round((event.loaded / event.total) * 100));

@@ -99,6 +99,19 @@ class FortifyServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($throttleKey);
         });
 
+        // The general ceiling for authenticated API traffic. Keyed by user, not IP, so
+        // one person on a shared network cannot exhaust everyone else's budget.
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
+        });
+
+        // Tighter, on top of the above, for the one endpoint where a single request
+        // can write a 10 MB object that nothing reclaims. Generous for a person
+        // typing, immediately painful for a loop.
+        RateLimiter::for('messages', function (Request $request) {
+            return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
+        });
+
         RateLimiter::for('passkeys', function (Request $request) {
             return Limit::perMinute(10)->by(
                 ($request->input('credential.id') ?: $request->session()->getId()).'|'.$request->ip(),
