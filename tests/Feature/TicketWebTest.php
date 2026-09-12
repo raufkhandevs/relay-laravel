@@ -34,3 +34,7 @@ it('refuses a stranger opening a ticket over the web', function () {
 
     $this->actingAs($stranger)->get("/tickets/{$ticket->id}")->assertForbidden();
 });
+
+it('redirects guests to the login page', function () {
+    $this->get('/tickets')->assertRedirect(route('login'));
+});
